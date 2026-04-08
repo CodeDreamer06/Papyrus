@@ -1,8 +1,9 @@
-# Papyrus AI
+# Papyrus
 
-Transform PDFs into interactive quizzes with AI-powered question generation. Papyrus AI analyzes your study materials and generates intelligent questions to help you learn and retain information more effectively.
+Your textbooks are full of facts. Papyrus finds them and turns them into questions.
 
-![Papyrus AI](https://img.shields.io/badge/Papyrus-AI-gold)
+Upload any PDF. In seconds, you get a quiz with multiple choice, matching, and short answer questions. The app even handles charts and math formulas.
+
 ![Next.js](https://img.shields.io/badge/Next.js-16-black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)
 
