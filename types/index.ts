@@ -1,20 +1,22 @@
-export type QuestionType = 
-  | 'multiple_choice'
-  | 'true_false'
-  | 'short_answer'
-  | 'fill_in_blank'
-  | 'matching'
-  | 'ordering'
-  | 'multi_select';
+export type QuestionType =
+  | "multiple_choice"
+  | "true_false"
+  | "short_answer"
+  | "fill_in_blank"
+  | "matching"
+  | "ordering"
+  | "multi_select";
 
-export type DifficultyLevel = 'easy' | 'medium' | 'hard';
+export type DifficultyLevel = "easy" | "medium" | "hard";
+export type MatchingAnswer = Record<string, string>;
+export type AnswerValue = string | string[] | MatchingAnswer;
 
 export interface Question {
   id: string;
   type: QuestionType;
   text: string;
   options?: string[];
-  correctAnswer: string | string[];
+  correctAnswer: AnswerValue;
   explanation?: string;
   topic: string;
   difficulty: DifficultyLevel;
@@ -36,7 +38,7 @@ export interface Quiz {
 export interface QuizSession {
   quizId: string;
   currentQuestionIndex: number;
-  answers: Record<string, string | string[]>;
+  answers: Record<string, AnswerValue>;
   startTime: number;
   elapsedTime: number;
   isComplete: boolean;
@@ -45,7 +47,7 @@ export interface QuizSession {
 
 export interface ProcessingStage {
   name: string;
-  status: 'pending' | 'processing' | 'completed' | 'error';
+  status: "pending" | "processing" | "completed" | "error";
   progress: number;
   message: string;
 }

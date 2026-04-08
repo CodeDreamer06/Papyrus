@@ -1,9 +1,15 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import type { Quiz, Question, QuestionType, DifficultyLevel } from '@/types';
-import { Trash2, Plus, ChevronDown, ChevronUp, Save } from 'lucide-react';
-import 'katex/dist/katex.min.css';
+import { useEffect, useState } from "react";
+import type { Quiz, Question, QuestionType, DifficultyLevel } from "@/types";
+import { Trash2, Plus, ChevronDown, ChevronUp, Save } from "lucide-react";
+import { MathText } from "@/components/math-text";
+import {
+  formatAnswerValue,
+  normalizeQuestion,
+  parseMatchingAnswer,
+  parseOrderingAnswer,
+} from "@/lib/quiz-answer-utils";
 
 interface QuizEditorProps {
   quiz: Quiz;
@@ -11,58 +17,61 @@ interface QuizEditorProps {
 }
 
 const questionTypes: { value: QuestionType; label: string }[] = [
-  { value: 'multiple_choice', label: 'Multiple Choice' },
-  { value: 'multi_select', label: 'Multi Select' },
-  { value: 'true_false', label: 'True/False' },
-  { value: 'short_answer', label: 'Short Answer' },
-  { value: 'fill_in_blank', label: 'Fill in Blank' },
-  { value: 'matching', label: 'Matching' },
-  { value: 'ordering', label: 'Ordering' },
+  { value: "multiple_choice", label: "Multiple Choice" },
+  { value: "multi_select", label: "Multi Select" },
+  { value: "true_false", label: "True/False" },
+  { value: "short_answer", label: "Short Answer" },
+  { value: "fill_in_blank", label: "Fill in Blank" },
+  { value: "matching", label: "Matching" },
+  { value: "ordering", label: "Ordering" },
 ];
 
 const difficultyLevels: { value: DifficultyLevel; label: string }[] = [
-  { value: 'easy', label: 'Easy' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'hard', label: 'Hard' },
+  { value: "easy", label: "Easy" },
+  { value: "medium", label: "Medium" },
+  { value: "hard", label: "Hard" },
 ];
 
 export function QuizEditor({ quiz, onSave }: QuizEditorProps) {
-  const [editedQuiz, setEditedQuiz] = useState<Quiz>({ ...quiz });
+  const [editedQuiz, setEditedQuiz] = useState<Quiz>({
+    ...quiz,
+    questions: quiz.questions.map(normalizeQuestion),
+  });
   const [expandedQuestion, setExpandedQuestion] = useState<string | null>(null);
 
   const updateQuizField = (field: keyof Quiz, value: string) => {
-    setEditedQuiz(prev => ({ ...prev, [field]: value }));
+    setEditedQuiz((prev) => ({ ...prev, [field]: value }));
   };
 
   const updateQuestion = (questionId: string, updates: Partial<Question>) => {
-    setEditedQuiz(prev => ({
+    setEditedQuiz((prev) => ({
       ...prev,
-      questions: prev.questions.map(q =>
-        q.id === questionId ? { ...q, ...updates } : q
+      questions: prev.questions.map((q) =>
+        q.id === questionId ? { ...q, ...updates } : q,
       ),
     }));
   };
 
   const deleteQuestion = (questionId: string) => {
-    setEditedQuiz(prev => ({
+    setEditedQuiz((prev) => ({
       ...prev,
-      questions: prev.questions.filter(q => q.id !== questionId),
+      questions: prev.questions.filter((q) => q.id !== questionId),
     }));
   };
 
   const addQuestion = () => {
     const newQuestion: Question = {
       id: `q-${Date.now()}`,
-      type: 'multiple_choice',
-      text: 'New question',
-      options: ['Option A', 'Option B', 'Option C', 'Option D'],
-      correctAnswer: 'Option A',
-      topic: 'General',
-      difficulty: 'medium',
+      type: "multiple_choice",
+      text: "New question",
+      options: ["Option A", "Option B", "Option C", "Option D"],
+      correctAnswer: "Option A",
+      topic: "General",
+      difficulty: "medium",
       points: 1,
       latex: false,
     };
-    setEditedQuiz(prev => ({
+    setEditedQuiz((prev) => ({
       ...prev,
       questions: [...prev.questions, newQuestion],
     }));
@@ -70,41 +79,77 @@ export function QuizEditor({ quiz, onSave }: QuizEditorProps) {
   };
 
   const handleSave = () => {
-    onSave(editedQuiz);
+    onSave({
+      ...editedQuiz,
+      questions: editedQuiz.questions.map(normalizeQuestion),
+    });
   };
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isTyping =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        target?.isContentEditable;
+
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        handleSave();
+        return;
+      }
+
+      if (isTyping) {
+        return;
+      }
+
+      if (event.key.toLowerCase() === "n") {
+        event.preventDefault();
+        addQuestion();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [editedQuiz]);
+
   const updateOption = (questionId: string, index: number, value: string) => {
-    const question = editedQuiz.questions.find(q => q.id === questionId);
+    const question = editedQuiz.questions.find((q) => q.id === questionId);
     if (!question) return;
-    
+
     const newOptions = [...(question.options || [])];
     newOptions[index] = value;
     updateQuestion(questionId, { options: newOptions });
   };
 
   const addOption = (questionId: string) => {
-    const question = editedQuiz.questions.find(q => q.id === questionId);
+    const question = editedQuiz.questions.find((q) => q.id === questionId);
     if (!question) return;
-    
-    const newOptions = [...(question.options || []), `Option ${String.fromCharCode(65 + (question.options?.length || 0))}`];
+
+    const newOptions = [
+      ...(question.options || []),
+      `Option ${String.fromCharCode(65 + (question.options?.length || 0))}`,
+    ];
     updateQuestion(questionId, { options: newOptions });
   };
 
   const removeOption = (questionId: string, index: number) => {
-    const question = editedQuiz.questions.find(q => q.id === questionId);
+    const question = editedQuiz.questions.find((q) => q.id === questionId);
     if (!question || !question.options || question.options.length <= 2) return;
-    
+
     const newOptions = question.options.filter((_, i) => i !== index);
     updateQuestion(questionId, { options: newOptions });
   };
 
   const renderLatexPreview = (text: string) => {
-    // Simple LaTeX detection - in production, use proper MathJax
-    if (text.includes('$')) {
+    if (text.includes("$")) {
       return (
         <div className="mt-2 p-3 rounded-lg bg-border/30 text-sm">
-          <span className="text-muted">LaTeX detected: </span>
-          <code className="text-accent">{text.match(/\$[^$]+\$/g)?.join(', ') || 'none'}</code>
+          <span className="text-muted">Preview: </span>
+          <span className="text-foreground">
+            <MathText text={text} />
+          </span>
         </div>
       );
     }
@@ -116,19 +161,23 @@ export function QuizEditor({ quiz, onSave }: QuizEditorProps) {
       {/* Quiz Info */}
       <div className="app-frame p-6 space-y-4">
         <div>
-          <label className="block text-sm font-medium text-muted mb-2">Quiz Title</label>
+          <label className="block text-sm font-medium text-muted mb-2">
+            Quiz Title
+          </label>
           <input
             type="text"
             value={editedQuiz.title}
-            onChange={(e) => updateQuizField('title', e.target.value)}
+            onChange={(e) => updateQuizField("title", e.target.value)}
             className="w-full px-4 py-3 rounded-xl bg-app-box border border-border text-foreground focus:border-accent focus:outline-none transition-colors"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-muted mb-2">Description</label>
+          <label className="block text-sm font-medium text-muted mb-2">
+            Description
+          </label>
           <textarea
             value={editedQuiz.description}
-            onChange={(e) => updateQuizField('description', e.target.value)}
+            onChange={(e) => updateQuizField("description", e.target.value)}
             rows={3}
             className="w-full px-4 py-3 rounded-xl bg-app-box border border-border text-foreground focus:border-accent focus:outline-none transition-colors resize-none"
           />
@@ -145,6 +194,7 @@ export function QuizEditor({ quiz, onSave }: QuizEditorProps) {
             <button
               onClick={addQuestion}
               className="btn-secondary flex items-center gap-2"
+              title="N"
             >
               <Plus className="w-4 h-4" />
               Add Question
@@ -152,6 +202,7 @@ export function QuizEditor({ quiz, onSave }: QuizEditorProps) {
             <button
               onClick={handleSave}
               className="btn-primary flex items-center gap-2"
+              title="Ctrl/Cmd+S"
             >
               <Save className="w-4 h-4" />
               Save Quiz
@@ -160,23 +211,30 @@ export function QuizEditor({ quiz, onSave }: QuizEditorProps) {
         </div>
 
         {editedQuiz.questions.map((question, index) => (
-          <div
-            key={question.id}
-            className="app-frame overflow-hidden"
-          >
+          <div key={question.id} className="app-frame overflow-hidden">
             {/* Question Header */}
             <div
               className="p-4 flex items-center justify-between cursor-pointer hover:bg-border/20 transition-colors"
-              onClick={() => setExpandedQuestion(expandedQuestion === question.id ? null : question.id)}
+              onClick={() =>
+                setExpandedQuestion(
+                  expandedQuestion === question.id ? null : question.id,
+                )
+              }
             >
               <div className="flex items-center gap-4">
                 <span className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center text-sm font-medium text-accent">
                   {index + 1}
                 </span>
                 <div>
-                  <p className="font-medium text-foreground line-clamp-1">{question.text}</p>
+                  <div className="font-medium text-foreground line-clamp-1">
+                    <MathText text={question.text} />
+                  </div>
                   <p className="text-sm text-muted">
-                    {questionTypes.find(t => t.value === question.type)?.label} • {question.topic} • {question.difficulty}
+                    {
+                      questionTypes.find((t) => t.value === question.type)
+                        ?.label
+                    }{" "}
+                    • {question.topic} • {question.difficulty}
                   </p>
                 </div>
               </div>
@@ -208,7 +266,12 @@ export function QuizEditor({ quiz, onSave }: QuizEditorProps) {
                   </label>
                   <textarea
                     value={question.text}
-                    onChange={(e) => updateQuestion(question.id, { text: e.target.value, latex: e.target.value.includes('$') })}
+                    onChange={(e) =>
+                      updateQuestion(question.id, {
+                        text: e.target.value,
+                        latex: e.target.value.includes("$"),
+                      })
+                    }
                     rows={3}
                     className="w-full px-4 py-3 rounded-xl bg-app-box border border-border text-foreground focus:border-accent focus:outline-none transition-colors resize-none"
                   />
@@ -218,44 +281,67 @@ export function QuizEditor({ quiz, onSave }: QuizEditorProps) {
                 {/* Type & Difficulty */}
                 <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-muted mb-2">Type</label>
+                    <label className="block text-sm font-medium text-muted mb-2">
+                      Type
+                    </label>
                     <select
                       value={question.type}
-                      onChange={(e) => updateQuestion(question.id, { type: e.target.value as QuestionType })}
+                      onChange={(e) =>
+                        updateQuestion(question.id, {
+                          type: e.target.value as QuestionType,
+                        })
+                      }
                       className="w-full px-4 py-3 rounded-xl bg-app-box border border-border text-foreground focus:border-accent focus:outline-none transition-colors"
                     >
-                      {questionTypes.map(type => (
-                        <option key={type.value} value={type.value}>{type.label}</option>
+                      {questionTypes.map((type) => (
+                        <option key={type.value} value={type.value}>
+                          {type.label}
+                        </option>
                       ))}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-muted mb-2">Topic</label>
+                    <label className="block text-sm font-medium text-muted mb-2">
+                      Topic
+                    </label>
                     <input
                       type="text"
                       value={question.topic}
-                      onChange={(e) => updateQuestion(question.id, { topic: e.target.value })}
+                      onChange={(e) =>
+                        updateQuestion(question.id, { topic: e.target.value })
+                      }
                       className="w-full px-4 py-3 rounded-xl bg-app-box border border-border text-foreground focus:border-accent focus:outline-none transition-colors"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-muted mb-2">Difficulty</label>
+                    <label className="block text-sm font-medium text-muted mb-2">
+                      Difficulty
+                    </label>
                     <select
                       value={question.difficulty}
-                      onChange={(e) => updateQuestion(question.id, { difficulty: e.target.value as DifficultyLevel })}
+                      onChange={(e) =>
+                        updateQuestion(question.id, {
+                          difficulty: e.target.value as DifficultyLevel,
+                        })
+                      }
                       className="w-full px-4 py-3 rounded-xl bg-app-box border border-border text-foreground focus:border-accent focus:outline-none transition-colors"
                     >
-                      {difficultyLevels.map(level => (
-                        <option key={level.value} value={level.value}>{level.label}</option>
+                      {difficultyLevels.map((level) => (
+                        <option key={level.value} value={level.value}>
+                          {level.label}
+                        </option>
                       ))}
                     </select>
                   </div>
                 </div>
 
                 {/* Options (for MCQ types) */}
-                {(question.type === 'multiple_choice' || question.type === 'multi_select') && (
+                {(question.type === "multiple_choice" ||
+                  question.type === "multi_select") && (
                   <div>
-                    <label className="block text-sm font-medium text-muted mb-2">Options</label>
+                    <label className="block text-sm font-medium text-muted mb-2">
+                      Options
+                    </label>
                     <div className="space-y-2">
                       {question.options?.map((option, optIndex) => (
                         <div key={optIndex} className="flex items-center gap-2">
@@ -265,7 +351,13 @@ export function QuizEditor({ quiz, onSave }: QuizEditorProps) {
                           <input
                             type="text"
                             value={option}
-                            onChange={(e) => updateOption(question.id, optIndex, e.target.value)}
+                            onChange={(e) =>
+                              updateOption(
+                                question.id,
+                                optIndex,
+                                e.target.value,
+                              )
+                            }
                             className="flex-1 px-4 py-2 rounded-lg bg-app-box border border-border text-foreground focus:border-accent focus:outline-none transition-colors"
                           />
                           <button
@@ -291,40 +383,71 @@ export function QuizEditor({ quiz, onSave }: QuizEditorProps) {
                 {/* Correct Answer */}
                 <div>
                   <label className="block text-sm font-medium text-muted mb-2">
-                    Correct Answer {question.type === 'multi_select' && '(comma-separated for multiple)'}
+                    Correct Answer{" "}
+                    {question.type === "multi_select" &&
+                      "(comma-separated for multiple)"}
                   </label>
-                  {question.type === 'multi_select' ? (
+                  {question.type === "multi_select" ? (
                     <input
                       type="text"
-                      value={Array.isArray(question.correctAnswer) ? question.correctAnswer.join(', ') : question.correctAnswer}
-                      onChange={(e) => updateQuestion(question.id, { correctAnswer: e.target.value.split(',').map(s => s.trim()) })}
+                      value={
+                        Array.isArray(question.correctAnswer)
+                          ? question.correctAnswer.join(", ")
+                          : formatAnswerValue(question.correctAnswer)
+                      }
+                      onChange={(e) =>
+                        updateQuestion(question.id, {
+                          correctAnswer: e.target.value
+                            .split(",")
+                            .map((s) => s.trim()),
+                        })
+                      }
                       className="w-full px-4 py-3 rounded-xl bg-app-box border border-border text-foreground focus:border-accent focus:outline-none transition-colors"
                       placeholder="Option A, Option C, Option D"
                     />
-                  ) : question.type === 'true_false' ? (
+                  ) : question.type === "true_false" ? (
                     <select
                       value={question.correctAnswer as string}
-                      onChange={(e) => updateQuestion(question.id, { correctAnswer: e.target.value })}
+                      onChange={(e) =>
+                        updateQuestion(question.id, {
+                          correctAnswer: e.target.value,
+                        })
+                      }
                       className="w-full px-4 py-3 rounded-xl bg-app-box border border-border text-foreground focus:border-accent focus:outline-none transition-colors"
                     >
                       <option value="true">True</option>
                       <option value="false">False</option>
                     </select>
-                  ) : question.type === 'multiple_choice' ? (
+                  ) : question.type === "multiple_choice" ? (
                     <select
                       value={question.correctAnswer as string}
-                      onChange={(e) => updateQuestion(question.id, { correctAnswer: e.target.value })}
+                      onChange={(e) =>
+                        updateQuestion(question.id, {
+                          correctAnswer: e.target.value,
+                        })
+                      }
                       className="w-full px-4 py-3 rounded-xl bg-app-box border border-border text-foreground focus:border-accent focus:outline-none transition-colors"
                     >
                       {question.options?.map((opt, i) => (
-                        <option key={i} value={opt}>{String.fromCharCode(65 + i)}. {opt}</option>
+                        <option key={i} value={opt}>
+                          {String.fromCharCode(65 + i)}. {opt}
+                        </option>
                       ))}
                     </select>
                   ) : (
                     <input
                       type="text"
-                      value={Array.isArray(question.correctAnswer) ? question.correctAnswer.join(', ') : question.correctAnswer}
-                      onChange={(e) => updateQuestion(question.id, { correctAnswer: e.target.value })}
+                      value={formatAnswerValue(question.correctAnswer)}
+                      onChange={(e) =>
+                        updateQuestion(question.id, {
+                          correctAnswer:
+                            question.type === "matching"
+                              ? parseMatchingAnswer(e.target.value)
+                              : question.type === "ordering"
+                                ? parseOrderingAnswer(e.target.value)
+                                : e.target.value,
+                        })
+                      }
                       className="w-full px-4 py-3 rounded-xl bg-app-box border border-border text-foreground focus:border-accent focus:outline-none transition-colors"
                     />
                   )}
@@ -332,10 +455,16 @@ export function QuizEditor({ quiz, onSave }: QuizEditorProps) {
 
                 {/* Explanation */}
                 <div>
-                  <label className="block text-sm font-medium text-muted mb-2">Explanation (Optional)</label>
+                  <label className="block text-sm font-medium text-muted mb-2">
+                    Explanation (Optional)
+                  </label>
                   <textarea
-                    value={question.explanation || ''}
-                    onChange={(e) => updateQuestion(question.id, { explanation: e.target.value })}
+                    value={question.explanation || ""}
+                    onChange={(e) =>
+                      updateQuestion(question.id, {
+                        explanation: e.target.value,
+                      })
+                    }
                     rows={2}
                     className="w-full px-4 py-3 rounded-xl bg-app-box border border-border text-foreground focus:border-accent focus:outline-none transition-colors resize-none"
                     placeholder="Explain why this is the correct answer..."
@@ -344,13 +473,19 @@ export function QuizEditor({ quiz, onSave }: QuizEditorProps) {
 
                 {/* Points */}
                 <div>
-                  <label className="block text-sm font-medium text-muted mb-2">Points</label>
+                  <label className="block text-sm font-medium text-muted mb-2">
+                    Points
+                  </label>
                   <input
                     type="number"
                     min={1}
                     max={10}
                     value={question.points}
-                    onChange={(e) => updateQuestion(question.id, { points: parseInt(e.target.value) || 1 })}
+                    onChange={(e) =>
+                      updateQuestion(question.id, {
+                        points: parseInt(e.target.value) || 1,
+                      })
+                    }
                     className="w-24 px-4 py-3 rounded-xl bg-app-box border border-border text-foreground focus:border-accent focus:outline-none transition-colors"
                   />
                 </div>
@@ -362,7 +497,10 @@ export function QuizEditor({ quiz, onSave }: QuizEditorProps) {
 
       {editedQuiz.questions.length === 0 && (
         <div className="text-center py-12 app-frame">
-          <p className="text-muted">No questions yet. Click "Add Question" to create your first question.</p>
+          <p className="text-muted">
+            No questions yet. Click "Add Question" to create your first
+            question.
+          </p>
         </div>
       )}
     </div>

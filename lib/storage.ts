@@ -1,66 +1,75 @@
-import type { Quiz, QuizSession } from '@/types';
+import type { Quiz, QuizSession } from "@/types";
+import { formatAnswerValue, normalizeQuestion } from "@/lib/quiz-answer-utils";
 
-const QUIZZES_KEY = 'papyrus-quizzes';
-const SESSIONS_KEY = 'papyrus-sessions';
+const QUIZZES_KEY = "papyrus-quizzes";
+const SESSIONS_KEY = "papyrus-sessions";
 
 export function saveQuiz(quiz: Quiz): void {
   const quizzes = getQuizzes();
-  const existingIndex = quizzes.findIndex(q => q.id === quiz.id);
-  
+  const normalizedQuiz: Quiz = {
+    ...quiz,
+    questions: quiz.questions.map(normalizeQuestion),
+  };
+  const existingIndex = quizzes.findIndex((q) => q.id === normalizedQuiz.id);
+
   if (existingIndex >= 0) {
-    quizzes[existingIndex] = quiz;
+    quizzes[existingIndex] = normalizedQuiz;
   } else {
-    quizzes.push(quiz);
+    quizzes.push(normalizedQuiz);
   }
-  
+
   localStorage.setItem(QUIZZES_KEY, JSON.stringify(quizzes));
 }
 
 export function getQuizzes(): Quiz[] {
-  if (typeof window === 'undefined') return [];
+  if (typeof window === "undefined") return [];
   const stored = localStorage.getItem(QUIZZES_KEY);
-  return stored ? JSON.parse(stored) : [];
+  const quizzes = stored ? (JSON.parse(stored) as Quiz[]) : [];
+  return quizzes.map((quiz) => ({
+    ...quiz,
+    questions: quiz.questions.map(normalizeQuestion),
+  }));
 }
 
 export function getQuiz(id: string): Quiz | null {
   const quizzes = getQuizzes();
-  return quizzes.find(q => q.id === id) || null;
+  return quizzes.find((q) => q.id === id) || null;
 }
 
 export function deleteQuiz(id: string): void {
-  const quizzes = getQuizzes().filter(q => q.id !== id);
+  const quizzes = getQuizzes().filter((q) => q.id !== id);
   localStorage.setItem(QUIZZES_KEY, JSON.stringify(quizzes));
-  
+
   // Also delete any sessions
   deleteSession(id);
 }
 
 export function saveSession(session: QuizSession): void {
   const sessions = getSessions();
-  const existingIndex = sessions.findIndex(s => s.quizId === session.quizId);
-  
+  const existingIndex = sessions.findIndex((s) => s.quizId === session.quizId);
+
   if (existingIndex >= 0) {
     sessions[existingIndex] = session;
   } else {
     sessions.push(session);
   }
-  
+
   localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
 }
 
 export function getSessions(): QuizSession[] {
-  if (typeof window === 'undefined') return [];
+  if (typeof window === "undefined") return [];
   const stored = localStorage.getItem(SESSIONS_KEY);
   return stored ? JSON.parse(stored) : [];
 }
 
 export function getSession(quizId: string): QuizSession | null {
   const sessions = getSessions();
-  return sessions.find(s => s.quizId === quizId) || null;
+  return sessions.find((s) => s.quizId === quizId) || null;
 }
 
 export function deleteSession(quizId: string): void {
-  const sessions = getSessions().filter(s => s.quizId !== quizId);
+  const sessions = getSessions().filter((s) => s.quizId !== quizId);
   localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
 }
 
@@ -70,53 +79,47 @@ export function exportQuizAsJSON(quiz: Quiz): string {
 
 export function exportQuizAsAnkiTSV(quiz: Quiz): string {
   const rows: string[] = [];
-  
+
   for (const question of quiz.questions) {
     let front = question.text;
-    let back = '';
-    
+    let back = "";
+
     switch (question.type) {
-      case 'multiple_choice':
-      case 'multi_select':
-        front += '\n\n' + (question.options?.map((o, i) => `${String.fromCharCode(65 + i)}. ${o}`).join('\n') || '');
-        back = Array.isArray(question.correctAnswer) 
-          ? question.correctAnswer.join(', ')
-          : question.correctAnswer;
+      case "multiple_choice":
+      case "multi_select":
+        front +=
+          "\n\n" +
+          (question.options
+            ?.map((o, i) => `${String.fromCharCode(65 + i)}. ${o}`)
+            .join("\n") || "");
+        back = formatAnswerValue(question.correctAnswer);
         break;
-      case 'true_false':
-        back = question.correctAnswer === 'true' ? 'True' : 'False';
+      case "true_false":
+        back = question.correctAnswer === "true" ? "True" : "False";
         break;
-      case 'fill_in_blank':
-        back = Array.isArray(question.correctAnswer) 
-          ? question.correctAnswer.join(', ')
-          : question.correctAnswer;
+      case "fill_in_blank":
+        back = formatAnswerValue(question.correctAnswer);
         break;
-      case 'matching':
-        back = Array.isArray(question.correctAnswer) 
-          ? question.correctAnswer.join('; ')
-          : question.correctAnswer;
+      case "matching":
+        back = formatAnswerValue(question.correctAnswer);
         break;
-      case 'ordering':
-        back = Array.isArray(question.correctAnswer) 
-          ? question.correctAnswer.join(' → ')
-          : question.correctAnswer;
+      case "ordering":
+        back = formatAnswerValue(question.correctAnswer);
         break;
       default:
-        back = Array.isArray(question.correctAnswer) 
-          ? question.correctAnswer.join(', ')
-          : question.correctAnswer;
+        back = formatAnswerValue(question.correctAnswer);
     }
-    
+
     if (question.explanation) {
       back += `\n\nExplanation: ${question.explanation}`;
     }
-    
+
     // Escape tabs and newlines for TSV
-    const escapedFront = front.replace(/\t/g, ' ').replace(/\n/g, '<br>');
-    const escapedBack = back.replace(/\t/g, ' ').replace(/\n/g, '<br>');
-    
+    const escapedFront = front.replace(/\t/g, " ").replace(/\n/g, "<br>");
+    const escapedBack = back.replace(/\t/g, " ").replace(/\n/g, "<br>");
+
     rows.push(`${escapedFront}\t${escapedBack}\t${question.topic}`);
   }
-  
-  return '# Front\tBack\tTags\n' + rows.join('\n');
+
+  return `# Front\tBack\tTags\n${rows.join("\n")}`;
 }

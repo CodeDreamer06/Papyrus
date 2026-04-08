@@ -1,32 +1,108 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { FileUpload } from '@/components/file-upload';
-import { ProcessingIndicator } from '@/components/processing-indicator';
-import { QuizEditor } from '@/components/quiz-editor';
-import { QuizInterface } from '@/components/quiz-interface';
-import { QuizResults } from '@/components/quiz-results';
-import { saveQuiz, getQuizzes, deleteQuiz, getSession } from '@/lib/storage';
-import type { Quiz, ProcessingState, QuizSession } from '@/types';
-import { Sun, Moon, FileText, Edit, Play, Trash2, Clock, CheckCircle, BookOpen } from 'lucide-react';
-import { useTheme } from '@/components/theme-provider';
+import { useEffect, useState } from "react";
+import { FileUpload } from "@/components/file-upload";
+import { ProcessingIndicator } from "@/components/processing-indicator";
+import { QuizEditor } from "@/components/quiz-editor";
+import { QuizInterface } from "@/components/quiz-interface";
+import { QuizResults } from "@/components/quiz-results";
+import { saveQuiz, getQuizzes, deleteQuiz, getSession } from "@/lib/storage";
+import type { Quiz, ProcessingState, QuizSession } from "@/types";
+import {
+  Sun,
+  Moon,
+  FileText,
+  Edit,
+  Play,
+  Trash2,
+  Clock,
+  CheckCircle,
+  BookOpen,
+  Keyboard,
+} from "lucide-react";
+import { useTheme } from "@/components/theme-provider";
 
-type ViewMode = 'home' | 'processing' | 'editor' | 'quiz' | 'results';
+type ViewMode = "home" | "processing" | "editor" | "quiz" | "results";
 
 export default function Home() {
   const { theme, toggleTheme } = useTheme();
-  const [view, setView] = useState<ViewMode>('home');
+  const [view, setView] = useState<ViewMode>("home");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [processingState, setProcessingState] = useState<ProcessingState | null>(null);
+  const [processingState, setProcessingState] =
+    useState<ProcessingState | null>(null);
   const [currentQuiz, setCurrentQuiz] = useState<Quiz | null>(null);
-  const [currentSession, setCurrentSession] = useState<QuizSession | null>(null);
+  const [currentSession, setCurrentSession] = useState<QuizSession | null>(
+    null,
+  );
   const [savedQuizzes, setSavedQuizzes] = useState<Quiz[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
 
   // Load saved quizzes on mount.
   useEffect(() => {
     setSavedQuizzes(getQuizzes());
   }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isTyping =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        target?.isContentEditable;
+
+      if (isTyping) {
+        return;
+      }
+
+      if (event.key === "?") {
+        event.preventDefault();
+        setShowShortcuts((value) => !value);
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+
+      if (key === "t") {
+        event.preventDefault();
+        toggleTheme();
+        return;
+      }
+
+      if (key === "h") {
+        event.preventDefault();
+        setView("home");
+        return;
+      }
+
+      if (key === "g" && selectedFile && !isLoading && view === "home") {
+        event.preventDefault();
+        void handleProcessPDF();
+        return;
+      }
+
+      if (key === "e" && currentQuiz) {
+        event.preventDefault();
+        setView("editor");
+        return;
+      }
+
+      if (key === "q" && currentQuiz) {
+        event.preventDefault();
+        setView("quiz");
+        return;
+      }
+
+      if (key === "r" && currentQuiz && currentSession?.isComplete) {
+        event.preventDefault();
+        setView("results");
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [currentQuiz, currentSession, isLoading, selectedFile, toggleTheme, view]);
 
   const refreshQuizzes = () => {
     setSavedQuizzes(getQuizzes());
@@ -40,32 +116,52 @@ export default function Home() {
     if (!selectedFile) return;
 
     setIsLoading(true);
-    setView('processing');
+    setView("processing");
     setProcessingState({
       totalPages: 0,
       currentPage: 0,
       stages: [
-        { name: 'text_extraction', status: 'processing', progress: 0, message: 'Uploading and extracting text from PDF' },
-        { name: 'vision_detection', status: 'pending', progress: 0, message: 'Analyzing page complexity' },
-        { name: 'question_generation', status: 'pending', progress: 0, message: 'Generating questions with AI' },
-        { name: 'validation', status: 'pending', progress: 0, message: 'Validating and organizing quiz' },
+        {
+          name: "text_extraction",
+          status: "processing",
+          progress: 0,
+          message: "Uploading and extracting text from PDF",
+        },
+        {
+          name: "vision_detection",
+          status: "pending",
+          progress: 0,
+          message: "Analyzing page complexity",
+        },
+        {
+          name: "question_generation",
+          status: "pending",
+          progress: 0,
+          message: "Generating questions with AI",
+        },
+        {
+          name: "validation",
+          status: "pending",
+          progress: 0,
+          message: "Validating and organizing quiz",
+        },
       ],
       isComplete: false,
     });
 
     try {
       const formData = new FormData();
-      formData.append('file', selectedFile);
-      formData.append('title', selectedFile.name.replace(/\.pdf$/i, ''));
+      formData.append("file", selectedFile);
+      formData.append("title", selectedFile.name.replace(/\.pdf$/i, ""));
 
-      const response = await fetch('/api/process-pdf', {
-        method: 'POST',
+      const response = await fetch("/api/process-pdf", {
+        method: "POST",
         body: formData,
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to process PDF');
+        throw new Error(errorData.error || "Failed to process PDF");
       }
 
       const data = await response.json();
@@ -74,11 +170,13 @@ export default function Home() {
       setCurrentQuiz(quiz);
       saveQuiz(quiz);
       refreshQuizzes();
-      setView('editor');
+      setView("editor");
     } catch (error) {
-      console.error('Error processing PDF:', error);
-      alert('Error processing PDF: ' + (error instanceof Error ? error.message : 'Unknown error'));
-      setView('home');
+      console.error("Error processing PDF:", error);
+      alert(
+        `Error processing PDF: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+      setView("home");
     } finally {
       setIsLoading(false);
     }
@@ -88,14 +186,20 @@ export default function Home() {
     saveQuiz(quiz);
     setCurrentQuiz(quiz);
     refreshQuizzes();
-    alert('Quiz saved successfully!');
+    alert("Quiz saved successfully!");
   };
 
   const handleStartQuiz = (quiz: Quiz) => {
     setCurrentQuiz(quiz);
     const savedSession = getSession(quiz.id);
-    if (savedSession && !savedSession.isComplete && savedSession.currentQuestionIndex > 0) {
-      if (confirm('You have a saved session. Continue from where you left off?')) {
+    if (
+      savedSession &&
+      !savedSession.isComplete &&
+      savedSession.currentQuestionIndex > 0
+    ) {
+      if (
+        confirm("You have a saved session. Continue from where you left off?")
+      ) {
         setCurrentSession(savedSession);
       } else {
         setCurrentSession(null);
@@ -103,16 +207,16 @@ export default function Home() {
     } else {
       setCurrentSession(null);
     }
-    setView('quiz');
+    setView("quiz");
   };
 
   const handleQuizComplete = (session: QuizSession) => {
     setCurrentSession(session);
-    setView('results');
+    setView("results");
   };
 
   const handleDeleteQuiz = (quizId: string) => {
-    if (confirm('Are you sure you want to delete this quiz?')) {
+    if (confirm("Are you sure you want to delete this quiz?")) {
       deleteQuiz(quizId);
       refreshQuizzes();
     }
@@ -120,21 +224,21 @@ export default function Home() {
 
   const handleEditQuiz = (quiz: Quiz) => {
     setCurrentQuiz(quiz);
-    setView('editor');
+    setView("editor");
   };
 
   const handleRetryQuiz = () => {
     if (currentQuiz) {
       setCurrentSession(null);
-      setView('quiz');
+      setView("quiz");
     }
   };
 
   const formatDate = (timestamp: number) => {
-    return new Date(timestamp).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
+    return new Date(timestamp).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
     });
   };
 
@@ -155,15 +259,30 @@ export default function Home() {
 
           <div className="flex items-center gap-4">
             <button
+              type="button"
               onClick={toggleTheme}
               className="p-2 rounded-lg hover:bg-border/50 transition-colors"
-              aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              aria-label={
+                theme === "dark"
+                  ? "Switch to light mode"
+                  : "Switch to dark mode"
+              }
+              title="T"
             >
-              {theme === 'dark' ? (
+              {theme === "dark" ? (
                 <Sun className="w-5 h-5 text-muted" />
               ) : (
                 <Moon className="w-5 h-5 text-muted" />
               )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowShortcuts((value) => !value)}
+              className="p-2 rounded-lg hover:bg-border/50 transition-colors"
+              aria-label="Toggle keyboard shortcuts"
+              title="?"
+            >
+              <Keyboard className="w-5 h-5 text-muted" />
             </button>
           </div>
         </div>
@@ -171,36 +290,75 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl mx-auto px-6 py-8 w-full">
-        {view === 'home' && (
+        {showShortcuts && (
+          <section className="app-frame p-5 max-w-3xl mx-auto mb-8">
+            <div className="flex items-center gap-2 mb-3 text-foreground font-medium">
+              <Keyboard className="w-4 h-4 text-accent" />
+              Keyboard Shortcuts
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-muted">
+              <p>
+                <span className="text-foreground">?</span> toggle shortcut help
+              </p>
+              <p>
+                <span className="text-foreground">T</span> theme
+              </p>
+              <p>
+                <span className="text-foreground">H</span> home
+              </p>
+              <p>
+                <span className="text-foreground">G</span> generate quiz
+              </p>
+              <p>
+                <span className="text-foreground">E</span> editor
+              </p>
+              <p>
+                <span className="text-foreground">Q</span> quiz
+              </p>
+              <p>
+                <span className="text-foreground">R</span> results
+              </p>
+              <p>
+                <span className="text-foreground">Ctrl/Cmd+S</span> save quiz
+              </p>
+            </div>
+          </section>
+        )}
+        {view === "home" && (
           <div className="space-y-12">
             {/* Hero Section */}
             <section className="text-center space-y-6 py-12">
               <h2 className="text-5xl md:text-6xl font-bold tracking-tighter text-foreground">
-                Transform PDFs into <span className="text-accent">Interactive Quizzes</span>
+                Transform PDFs into{" "}
+                <span className="text-accent">Interactive Quizzes</span>
               </h2>
               <p className="text-xl text-muted max-w-2xl mx-auto">
-                Upload your study materials and let AI generate intelligent questions. 
-                Practice, learn, and master any subject with personalized quizzes.
+                Upload your study materials and let AI generate intelligent
+                questions. Practice, learn, and master any subject with
+                personalized quizzes.
               </p>
-              
+
               {/* Upload Section */}
               <div className="max-w-2xl mx-auto pt-8">
                 <FileUpload onFileSelect={handleFileSelect} />
-                
+
                 {selectedFile && (
                   <div className="mt-6 flex justify-center gap-4">
                     <button
+                      type="button"
                       onClick={() => setSelectedFile(null)}
                       className="btn-secondary"
                     >
                       Change File
                     </button>
                     <button
+                      type="button"
                       onClick={handleProcessPDF}
                       disabled={isLoading}
                       className="btn-primary"
+                      title="G"
                     >
-                      {isLoading ? 'Processing...' : 'Generate Quiz'}
+                      {isLoading ? "Processing..." : "Generate Quiz"}
                     </button>
                   </div>
                 )}
@@ -212,25 +370,26 @@ export default function Home() {
             {/* Saved Quizzes */}
             {savedQuizzes.length > 0 && (
               <section>
-                <h3 className="text-2xl font-semibold text-foreground mb-6">Your Quizzes</h3>
+                <h3 className="text-2xl font-semibold text-foreground mb-6">
+                  Your Quizzes
+                </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {savedQuizzes.map((quiz) => (
-                    <div
-                      key={quiz.id}
-                      className="voice-card group"
-                    >
+                    <div key={quiz.id} className="voice-card group">
                       <div className="flex items-start justify-between mb-4">
                         <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center">
                           <FileText className="w-5 h-5 text-accent" />
                         </div>
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
+                            type="button"
                             onClick={() => handleEditQuiz(quiz)}
                             className="p-2 rounded-lg hover:bg-border/50 text-muted"
                           >
                             <Edit className="w-4 h-4" />
                           </button>
                           <button
+                            type="button"
                             onClick={() => handleDeleteQuiz(quiz.id)}
                             className="p-2 rounded-lg hover:bg-red-500/10 text-muted hover:text-red-500"
                           >
@@ -274,8 +433,10 @@ export default function Home() {
                       </div>
 
                       <button
+                        type="button"
                         onClick={() => handleStartQuiz(quiz)}
                         className="btn-primary w-full flex items-center justify-center gap-2"
+                        title="Q"
                       >
                         <Play className="w-4 h-4" />
                         Start Quiz
@@ -288,17 +449,18 @@ export default function Home() {
           </div>
         )}
 
-        {view === 'processing' && processingState && (
+        {view === "processing" && processingState && (
           <div className="max-w-2xl mx-auto py-12">
             <ProcessingIndicator state={processingState} />
           </div>
         )}
 
-        {view === 'editor' && currentQuiz && (
+        {view === "editor" && currentQuiz && (
           <div className="max-w-4xl mx-auto py-8">
             <div className="flex items-center justify-between mb-8">
               <button
-                onClick={() => setView('home')}
+                type="button"
+                onClick={() => setView("home")}
                 className="btn-secondary"
               >
                 ← Back to Home
@@ -308,27 +470,27 @@ export default function Home() {
           </div>
         )}
 
-        {view === 'quiz' && currentQuiz && (
+        {view === "quiz" && currentQuiz && (
           <div className="py-8">
             <QuizInterface
               quiz={currentQuiz}
               onComplete={handleQuizComplete}
               onExit={() => {
-                if (confirm('Your progress will be saved. Exit anyway?')) {
-                  setView('home');
+                if (confirm("Your progress will be saved. Exit anyway?")) {
+                  setView("home");
                 }
               }}
             />
           </div>
         )}
 
-        {view === 'results' && currentQuiz && currentSession && (
+        {view === "results" && currentQuiz && currentSession && (
           <div className="py-8">
             <QuizResults
               quiz={currentQuiz}
               session={currentSession}
               onRetry={handleRetryQuiz}
-              onHome={() => setView('home')}
+              onHome={() => setView("home")}
             />
           </div>
         )}
