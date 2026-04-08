@@ -4,6 +4,8 @@ Your textbooks are full of facts. Papyrus finds them and turns them into questio
 
 Upload any PDF. In seconds, you get a quiz with multiple choice, matching, and short answer questions. The app even handles charts and math formulas.
 
+![Papyrus Screenshot](./screenshot.png)
+
 ![Next.js](https://img.shields.io/badge/Next.js-16-black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)
 
